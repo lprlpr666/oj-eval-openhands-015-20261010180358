@@ -1,8 +1,4 @@
-#include <iostream>
-#include <string>
-#include <map>
-#include <set>
-// solution for problem 015
+#include <bits/stdc++.h>
 using namespace std;
 
 int main() {
