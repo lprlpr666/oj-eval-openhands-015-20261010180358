@@ -4,33 +4,46 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <sys/stat.h>
 using namespace std;
 
-const string DATA_FILE = "data.txt";
+const string DB_DIR = "db";
 
-void insert_entry(const string &idx, int val) {
-    // Check for duplicate before inserting
-    ifstream in(DATA_FILE);
+void ensure_db_dir() {
+    struct stat st = {0};
+    if (stat(DB_DIR.c_str(), &st) == -1) {
+        mkdir(DB_DIR.c_str(), 0755);
+    }
+}
+
+string file_path(const string &idx) {
+    return DB_DIR + "/" + idx;
+}
+
+bool entry_exists(const string &idx, int val) {
+    ifstream in(file_path(idx));
     string line;
     while (getline(in, line)) {
         string cur_idx; int cur_val;
         stringstream ss(line);
         if (!(ss >> cur_idx >> cur_val)) continue;
-        if (cur_idx == idx && cur_val == val) return; // duplicate, do nothing
+        if (cur_idx == idx && cur_val == val) return true;
     }
-    // Append new entry
-    ofstream out(DATA_FILE, ios::app);
+    return false;
+}
+
+void insert_entry(const string &idx, int val) {
+    if (entry_exists(idx, val)) return; // avoid duplicate
+    ofstream out(file_path(idx), ios::app);
     out << idx << ' ' << val << '\n';
 }
 
 void delete_entry(const string &idx, int val) {
-    // Remove first matching entry
-    ifstream in(DATA_FILE);
+    ifstream in(file_path(idx));
     string line;
     bool removed = false;
-    // Use a temporary file
-    const string TMP_FILE = "data_tmp.txt";
-    ofstream out(TMP_FILE);
+    const string tmp_file = DB_DIR + "/tmp_" + idx;
+    ofstream out(tmp_file);
     while (getline(in, line)) {
         string cur_idx; int cur_val;
         stringstream ss(line);
@@ -43,12 +56,23 @@ void delete_entry(const string &idx, int val) {
     }
     in.close();
     out.close();
-    // Replace original file
-    rename(TMP_FILE.c_str(), DATA_FILE.c_str());
+    // Replace original file with temp (if any entry left, otherwise delete file)
+    if (removed) {
+        // Check if temp file is empty
+        ifstream check(tmp_file);
+        bool empty = check.peek() == EOF;
+        check.close();
+        if (empty) {
+            remove(file_path(idx).c_str());
+            remove(tmp_file.c_str());
+        } else {
+            rename(tmp_file.c_str(), file_path(idx).c_str());
+        }
+    }
 }
 
 void find_entries(const string &idx) {
-    ifstream in(DATA_FILE);
+    ifstream in(file_path(idx));
     string line;
     vector<int> vals;
     while (getline(in, line)) {
@@ -72,13 +96,7 @@ void find_entries(const string &idx) {
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    // Ensure data file exists
-    {
-        ifstream f(DATA_FILE);
-        if (!f) {
-            ofstream out(DATA_FILE);
-        }
-    }
+    ensure_db_dir();
     int n;
     if (!(cin >> n)) return 0;
     string cmd, idx;
